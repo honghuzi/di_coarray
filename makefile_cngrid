@@ -1,0 +1,73 @@
+HOME=/usr/local
+FC = ifort
+IFORTDIR=/public/software/compiler
+MKLPATH=$(IFORTDIR)/mkl
+MKLLIB= -mkl -lmkl_intel_lp64 -lmkl_core -lmkl_intel_thread
+FFLAGS=-I$(MKLPATH)/include
+LDFLAGS=-L$(MKLPATH)/lib/intel64
+
+INC = -I/usr/include  -I/usr/local/include -I$(IFORTDIR)/impi_5.0.1/include64 -I$(HOME)/include
+
+# linking
+LDPATH = -L$(HOME)/lib $(LDFLAGS) -lmpi_mt  -L$(IFORTDIR)/mpirt/lib/intel64 # -L$(IFORTDIR)/impi_5.0.1/lib64
+
+# libraries
+LIBS = $(MKLLIB)  -lpthread  -lm
+
+# optimization
+OP= -O3  #-coarray=shared -coarray-num-images=1 # -coarray-config-file=./cafconf  #-coarray-num-images=16  #-parallel
+
+#------------------------------------------------------------
+# Main target (this is been made when you just type 'make')
+all:	qtmcdi.x
+
+qtmcdi.x: qtmcdi.f90 consts.o laserparameter.o consts.f90 init1.f90 init2.f90 ground.f90 propagate.f90 evolution.f90 initx.f90 laserparameter.f90 DLSODA.F asym.f90
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x qtmcdi.f90 init1.f90 init2.f90 ground.f90 initx.f90 DLSODA.F propagate.f90  evolution.f90  asym.f90 consts.o laserparameter.o $(LIBS)
+
+#qtmcdi.x: qtmcdi.f90  init1.f90 init2.f90 evolution.f90 #asym.f90
+#	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x qtmcdi.f90 init1.f90 init2.f90  evolution.f90 $(LIBS)
+
+init1.x: init1.f90 consts.o consts.f90 laserparameter.o laserparameter.f90 initx.f90
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x init1.f90 initx.f90 consts.o laserparameter.o $(LIBS)
+
+init2.x: init2.f90 consts.o consts.f90 laserparameter.o laserparameter.f90 ground.f90
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x init2.f90 ground.f90 consts.o laserparameter.o $(LIBS)
+
+ground.x: ground.f90 consts.o consts.f90   DLSODA.F
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x ground.f90 consts.o DLSODA.F  $(LIBS)
+
+initx.x: initx.f90 consts.o consts.f90
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x initx.f90 consts.o $(LIBS)
+
+propagate.x: propagate.f90 consts.o consts.f90 laserparameter.o laserparameter.f90 DLSODA.F
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x propagate.f90 DLSODA.F consts.o laserparameter.o $(LIBS)
+
+evolution.x: evolution.f90 propagate.f90 consts.o consts.f90 laserparameter.o laserparameter.f90
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x evolution.f90 propagate.f90 consts.o laserparameter.o $(LIBS)
+
+asym.x: asym.f90 consts.f90 consts.o
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x asym.f90 consts.o $(LIBS)
+
+DLSODA.x: DLSODA.F
+	$(FC) $(FFLAGS) $(INC) $(LDPATH) $(OP) -o $*.x DLSODA.F
+
+consts.x: consts.f90
+	$(FC) $(FFLAGS) -o $*.x consts.f90
+laserparameter.x: laserparameter.f90
+	$(FC) $(FFLAGS) -o $*.x laserparameter.f90
+
+.SUFFIXES: .f90 .o .x
+
+.f90.o:
+	$(FC) $(FFLAGS) $(INC) -c $*.f90
+
+.o.x:
+	$(FC) $(LDPATH) -o $*.x $*.o $(LIBS)
+
+clean:
+	rm -f $(bins) a.out *.x *.o *.mod $(data)
+
+run:
+	nohup ./qtmcdi.x 1>output 2>err&
+
+.PHONY: clean all
